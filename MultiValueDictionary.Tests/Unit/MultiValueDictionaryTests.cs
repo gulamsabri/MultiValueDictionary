@@ -3,7 +3,6 @@ using System.Linq;
 using AutoFixture;
 using FluentAssertions;
 using Moq;
-using MultiValueDictionary.Exceptions;
 using Xunit;
 
 namespace MultiValueDictionary.Tests.Unit
@@ -18,7 +17,7 @@ namespace MultiValueDictionary.Tests.Unit
             _fixture = new Fixture();
             _mockDictionary = new Mock<IDictionary<string, ICollection<string>>>();
         }
-        
+
         [Fact]
         public void AllMembers_FlattensValueCollections()
         {
@@ -29,16 +28,16 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary
                 .Setup(x => x.Values)
                 .Returns(fakeValues);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.AllMembers
                 .Should()
                 .BeEquivalentTo(expectedResult);
-            
+
             _mockDictionary.VerifyAll();
         }
-        
+
         [Fact]
         public void Add_WhenNewKey_ThenAddsKeyWithNewHashSetMember()
         {
@@ -47,18 +46,18 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary
                 .Setup(x => x.ContainsKey(fakeKey))
                 .Returns(false);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
-            
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
+
             sut.Add(fakeKey, fakeMember);
-            
+
             _mockDictionary.VerifyAll();
             _mockDictionary
-                .Verify(x => 
-                    x.Add(fakeKey, It.Is<HashSet<string>>(v => v.Contains(fakeMember))), 
+                .Verify(x =>
+                        x.Add(fakeKey, It.Is<HashSet<string>>(v => v.Contains(fakeMember))),
                     Times.Once());
         }
-        
+
         [Fact]
         public void Add_WhenExistingKey_ThenUpdatesExistingHashsetWithMember()
         {
@@ -70,15 +69,15 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary
                 .Setup(x => x[fakeKey])
                 .Returns(mockMemberCollection.Object);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.Add(fakeKey, fakeMember);
-            
+
             _mockDictionary.VerifyAll();
             mockMemberCollection.Verify(x => x.Add(fakeMember), Times.Once());
         }
-        
+
         [Fact]
         public void Add_WhenExistingKeyAndMember_ThenThrowsMemberExistsException()
         {
@@ -90,40 +89,40 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary
                 .Setup(x => x[fakeKey])
                 .Returns(mockMemberCollection.Object);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.Invoking(x => x.Add(fakeKey, fakeMember))
                 .Should()
                 .ThrowExactly<MemberExistsException>()
                 .WithMessage(Constants.Messages.MemberExists);
-            
+
             _mockDictionary.VerifyAll();
             mockMemberCollection.Verify(x => x.Add(fakeMember), Times.Never);
         }
-        
+
         [Fact]
         public void Clear_CallsClearOnUnderlyingDictionary()
         {
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.Clear();
-            
+
             _mockDictionary.Verify(x => x.Clear(), Times.Once);
         }
-        
+
         [Fact]
         public void Items_ReturnsUnderlyingDictionaryAsReadOnly()
         {
             var fakeDictionary = _fixture.Create<Dictionary<string, ICollection<string>>>();
-            
-            var sut = new MultiValueDictionary<string,string>(fakeDictionary);
+
+            var sut = new MultiValueDictionary<string, string>(fakeDictionary);
 
             sut.Items
                 .Should()
                 .BeEquivalentTo((IReadOnlyDictionary<string, ICollection<string>>) fakeDictionary);
         }
-        
+
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -133,31 +132,33 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary
                 .Setup(x => x.ContainsKey(fakeKey))
                 .Returns(underlyingResult);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.KeyExists(fakeKey)
                 .Should().Be(underlyingResult);
 
             _mockDictionary.VerifyAll();
         }
-        
+
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void Remove_WithKey_ReturnsUnderlyingCollectionRemoveResult(bool underlyingResult)
+        public void Remove_WhenMemberNotAlone_ThenReturnsUnderlyingCollectionRemoveResult(bool underlyingResult)
         {
             var fakeKey = _fixture.Create<string>();
             var fakeMember = _fixture.Create<string>();
             var mockMemberCollection = new Mock<ICollection<string>>();
-            _mockDictionary
-                .Setup(x => x[fakeKey])
-                .Returns(mockMemberCollection.Object);
+            mockMemberCollection.Setup(x => x.Contains(fakeMember)).Returns(true);
+            mockMemberCollection.Setup(x => x.Count).Returns(2);
             mockMemberCollection
                 .Setup(x => x.Remove(fakeMember))
                 .Returns(underlyingResult);
-            
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+            _mockDictionary
+                .Setup(x => x[fakeKey])
+                .Returns(mockMemberCollection.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.Remove(fakeKey, fakeMember)
                 .Should().Be(underlyingResult);
@@ -165,7 +166,55 @@ namespace MultiValueDictionary.Tests.Unit
             _mockDictionary.VerifyAll();
             mockMemberCollection.VerifyAll();
         }
-        
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Remove_WhenMemberIsAlone_ThenReturnsUnderlyingKeyRemoveResult(bool underlyingResult)
+        {
+            var fakeKey = _fixture.Create<string>();
+            var fakeMember = _fixture.Create<string>();
+            var mockMemberCollection = new Mock<ICollection<string>>();
+            mockMemberCollection.Setup(x => x.Contains(fakeMember)).Returns(true);
+            mockMemberCollection.Setup(x => x.Count).Returns(1);
+            _mockDictionary
+                .Setup(x => x.Remove(fakeKey))
+                .Returns(underlyingResult);
+            _mockDictionary
+                .Setup(x => x[fakeKey])
+                .Returns(mockMemberCollection.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
+
+            sut.Remove(fakeKey, fakeMember)
+                .Should().Be(underlyingResult);
+
+            _mockDictionary.VerifyAll();
+            mockMemberCollection.VerifyAll();
+        }
+
+        [Fact]
+        public void Remove_WhenMemberDoesNotExist_ThenThrowsMemberDoesNotExistException()
+        {
+            var fakeKey = _fixture.Create<string>();
+            var fakeMember = _fixture.Create<string>();
+            var mockMemberCollection = new Mock<ICollection<string>>();
+            mockMemberCollection.Setup(x => x.Contains(fakeMember)).Returns(false);
+            _mockDictionary
+                .Setup(x => x[fakeKey])
+                .Returns(mockMemberCollection.Object);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
+
+            sut.Invoking(x => x.Remove(fakeKey, fakeMember))
+                .Should()
+                .ThrowExactly<MemberDoesNotExistException>()
+                .WithMessage(Constants.Messages.MemberDoesNotExist);
+
+            _mockDictionary.VerifyAll();
+            mockMemberCollection.VerifyAll();
+        }
+
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -173,17 +222,37 @@ namespace MultiValueDictionary.Tests.Unit
         {
             var fakeKey = _fixture.Create<string>();
             _mockDictionary
+                .Setup(x => x.Keys.Contains(fakeKey))
+                .Returns(true);
+            _mockDictionary
                 .Setup(x => x.Remove(fakeKey))
                 .Returns(underlyingResult);
 
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.RemoveAll(fakeKey)
                 .Should().Be(underlyingResult);
 
             _mockDictionary.VerifyAll();
         }
-        
+
+        [Fact]
+        public void RemoveAll_WhenKeyDoesNotExist_ThenThrowsKeyNotFoundException()
+        {
+            var fakeKey = _fixture.Create<string>();
+            _mockDictionary
+                .Setup(x => x.Keys.Contains(fakeKey))
+                .Returns(false);
+
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
+
+            sut.Invoking(x => x.RemoveAll(fakeKey))
+                .Should()
+                .ThrowExactly<KeyNotFoundException>();
+
+            _mockDictionary.VerifyAll();
+        }
+
         [Fact]
         public void Members_WithKey_ReturnsUnderlyingCollectionAsReadOnly()
         {
@@ -193,15 +262,15 @@ namespace MultiValueDictionary.Tests.Unit
                 .Setup(x => x[fakeKey])
                 .Returns(fakeMemberCollection);
 
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.Members(fakeKey)
                 .Should()
                 .BeEquivalentTo(fakeMemberCollection);
-            
+
             _mockDictionary.VerifyAll();
         }
-        
+
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -217,7 +286,7 @@ namespace MultiValueDictionary.Tests.Unit
                 .Setup(x => x.Contains(fakeMember))
                 .Returns(underlyingResult);
 
-            var sut = new MultiValueDictionary<string,string>(_mockDictionary.Object);
+            var sut = new MultiValueDictionary<string, string>(_mockDictionary.Object);
 
             sut.MemberExists(fakeKey, fakeMember)
                 .Should().Be(underlyingResult);

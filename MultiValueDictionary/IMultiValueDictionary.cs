@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 
 namespace MultiValueDictionary
@@ -8,7 +7,7 @@ namespace MultiValueDictionary
         IReadOnlyCollection<TMember> AllMembers { get; }
         IReadOnlyDictionary<TKey, ICollection<TMember>> Items { get; }
         IReadOnlyCollection<TKey> Keys { get; }
-        
+
         void Add(TKey key, TMember member);
 
         void Clear();

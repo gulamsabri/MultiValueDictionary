@@ -4,81 +4,77 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MultiValueDictionary.Command;
 
 namespace MultiValueDictionary.Console
 {
-    class Program
+    internal class Program
     {
-        static Task Main(string[] args)
+        private static readonly Dictionary<string, IStringCommand> CommandStrategy = new()
+        {
+            {Constants.Commands.Add, new Add()},
+            {Constants.Commands.AllMembers, new AllMembers()},
+            {Constants.Commands.Clear, new Clear()},
+            {Constants.Commands.Items, new Items()},
+            {Constants.Commands.Keys, new Keys()},
+            {Constants.Commands.KeyExists, new KeyExists()},
+            {Constants.Commands.MemberExists, new MemberExists()},
+            {Constants.Commands.Members, new Members()},
+            {Constants.Commands.Remove, new Remove()},
+            {Constants.Commands.RemoveAll, new RemoveAll()}
+        };
+
+        private static Task Main(string[] args)
         {
             using var host = CreateHostBuilder(args).Build();
             Run(host.Services, args);
             return host.RunAsync();
         }
 
-        private static IHostBuilder CreateHostBuilder(string[] args) =>
-            Host.CreateDefaultBuilder(args)
+        private static IHostBuilder CreateHostBuilder(string[] args)
+        {
+            return Host.CreateDefaultBuilder(args)
                 .ConfigureServices((_, services) =>
                     services
                         .AddSingleton(
                             typeof(IMultiValueDictionary<string, string>),
-                            new MultiValueDictionary<string, string>(new Dictionary<string, ICollection<string>>()))
-                        .AddTransient<ICommandService<string, string>, CommandService<string, string>>());
+                            new MultiValueDictionary<string, string>(new Dictionary<string, ICollection<string>>())));
+        }
 
         private static void PrintResponse(string message)
         {
-            System.Console.WriteLine(
-                $"{Constants.ResponseIndicator}{message}");
+            System.Console.Write(message);
         }
-        
+
         private static void Run(IServiceProvider services, string[] args)
         {
             using var serviceScope = services.CreateScope();
             var provider = serviceScope.ServiceProvider;
+            var multiValueDictionary = provider.GetRequiredService<IMultiValueDictionary<string, string>>();
 
-            var service = provider.GetRequiredService<ICommandService<string, string>>();
+            System.Console.WriteLine(Constants.Messages.Welcome);
 
-            System.Console.WriteLine("Welcome to MultiValue Dictionary.");
-            
             while (true)
             {
                 System.Console.Write(Constants.Prompt);
-                var commandArgs = System.Console.ReadLine()?.Split(" ");
-                var command = commandArgs?.First();
+                var commandArgs = System.Console.ReadLine()?.Split(Constants.InputSeparator);
+                var command = commandArgs?.First().ToUpper();
 
-                if (command == null || command.Equals(Constants.Commands.Quit, StringComparison.CurrentCultureIgnoreCase))
+                if (command == null ||
+                    command.Equals(Constants.Commands.Quit, StringComparison.CurrentCultureIgnoreCase))
                     break;
 
-                switch (command.ToUpper())
+                try
                 {
-                    case Constants.Commands.Add:
-                        PrintResponse(service.Add(commandArgs[1], commandArgs[2]));
-                        break;
-                    case Constants.Commands.Clear:
-                        PrintResponse(service.Clear());
-                        break;
-                    case Constants.Commands.Items:
-                        System.Console.Write(service.Items());
-                        break;
-                    case Constants.Commands.Keys:
-                        System.Console.Write(service.Keys());
-                        break;
-                    case Constants.Commands.Members:
-                        break;
-                    case Constants.Commands.Remove:
-                        break;
-                    case Constants.Commands.AllMembers:
-                        break;
-                    case Constants.Commands.KeyExists:
-                        PrintResponse(service.KeyExists(commandArgs[1]));
-                        break;
-                    case Constants.Commands.MemberExists:
-                        break;
-                    case Constants.Commands.RemoveAll:
-                        break;
-                    default:
-                        System.Console.WriteLine(Constants.Messages.CommandNotRecognized);
-                        break;
+                    PrintResponse(CommandStrategy[command].Execute(multiValueDictionary, commandArgs));
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    System.Console.WriteLine($"{Constants.ResponseIndicator}{Constants.Messages.NotEnoughArguments}");
+                }
+                catch (KeyNotFoundException)
+                {
+                    System.Console.WriteLine($"{Constants.ResponseIndicator}{Constants.Messages.CommandNotRecognized}");
                 }
             }
         }
