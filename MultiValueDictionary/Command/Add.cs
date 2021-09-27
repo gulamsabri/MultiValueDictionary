@@ -6,7 +6,14 @@ namespace MultiValueDictionary.Command
         {
             try
             {
-                mvd.Add(args[1], args[2]);
+                var member = args[2];
+                var i = 0;
+                while (mvd.MemberExists(args[1], member))
+                {
+                    i++;
+                    member = args[2] + "i";
+                }
+                mvd.Add(args[i], member);
             }
             catch (MemberExistsException e)
             {
